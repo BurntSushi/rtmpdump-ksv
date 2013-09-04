@@ -65,6 +65,7 @@
 #include <polarssl/net.h>
 #include <polarssl/ssl.h>
 #include <polarssl/havege.h>
+#include <polarssl/md5.h>
 #if POLARSSL_VERSION_NUMBER < 0x01010000
 #define havege_random	havege_rand
 #endif
@@ -105,6 +106,7 @@ typedef struct tls_server_ctx {
 #define TLS_write(s,b,l)	ssl_write(s,(unsigned char *)b,l)
 #define TLS_shutdown(s)	ssl_close_notify(s)
 #define TLS_close(s)	ssl_free(s); free(s)
+#define md5_hash(i, ilen, o) md5(i, ilen, o)
 
 #elif defined(USE_GNUTLS)
 #include <gnutls/gnutls.h>
@@ -122,6 +124,8 @@ typedef struct tls_ctx {
 #define TLS_write(s,b,l)	gnutls_record_send(s,b,l)
 #define TLS_shutdown(s)	gnutls_bye(s, GNUTLS_SHUT_RDWR)
 #define TLS_close(s)	gnutls_deinit(s)
+#define md5_hash(i, ilen, o) gnutls_digest_algorithm_t algorithm = GNUTLS_DIG_MD5;\
+                             gnutls_hash_fast(algorithm, i, ilen, o);
 
 #else	/* USE_OPENSSL */
 #define TLS_CTX	SSL_CTX *
@@ -134,6 +138,7 @@ typedef struct tls_ctx {
 #define TLS_write(s,b,l)	SSL_write(s,b,l)
 #define TLS_shutdown(s)	SSL_shutdown(s)
 #define TLS_close(s)	SSL_free(s)
+#define md5_hash(i, ilen, o) MD5(i, ilen, o)
 
 #endif
 #endif

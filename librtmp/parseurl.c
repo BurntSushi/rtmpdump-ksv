@@ -140,11 +140,16 @@ parsehost:
 	char *slash2, *slash3 = NULL, *slash4 = NULL;
 	int applen, appnamelen;
 
-	slash2 = strchr(p, '/');
-	if(slash2)
-		slash3 = strchr(slash2+1, '/');
-	if(slash3)
-		slash4 = strchr(slash3+1, '/');
+    if ((slash2 = strstr(p, "//")))
+      slash2 += 1;
+    else
+      {
+        slash2 = strchr(p, '/');
+        if (slash2)
+          slash3 = strchr(slash2 + 1, '/');
+        if (slash3)
+          slash4 = strchr(slash3 + 1, '/');
+      }
 
 	applen = end-p; /* ondemand, pass all parameters as app */
 	appnamelen = applen; /* ondemand length */
@@ -170,7 +175,9 @@ parsehost:
 
 	app->av_val = p;
 	app->av_len = applen;
-	RTMP_Log(RTMP_LOGDEBUG, "Parsed app     : %.*s", applen, p);
+    if (app->av_val[app->av_len - 1] == '/')
+      app->av_len -= 1;
+    RTMP_Log(RTMP_LOGDEBUG, "Parsed app     : %.*s", app->av_len, app->av_val);
 
 	p += appnamelen;
 	}

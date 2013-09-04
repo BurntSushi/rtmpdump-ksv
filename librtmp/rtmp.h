@@ -150,12 +150,14 @@ extern "C"
     AVal playpath;	/* passed in explicitly */
     AVal tcUrl;
     AVal swfUrl;
+    AVal swfHash;
     AVal pageUrl;
     AVal app;
     AVal auth;
     AVal flashVer;
     AVal subscribepath;
     AVal usherToken;
+    AVal WeebToken;
     AVal token;
     AVal pubUser;
     AVal pubPasswd;
@@ -174,9 +176,15 @@ extern "C"
     int lFlags;
 
     int swfAge;
+    int swfSize;
 
     int protocol;
+    int ConnectPacket;
+    int CombineConnectPacket;
+    int redirected;
     int timeout;		/* connection timeout in seconds */
+    AVal Extras;
+    AVal HandshakeResponse;
 
 #define RTMP_PUB_NAME   0x0001  /* send login to server */
 #define RTMP_PUB_RESP   0x0002  /* send salted password hash */
@@ -224,6 +232,7 @@ extern "C"
     /* if bResume == TRUE */
     uint8_t initialFrameType;
     uint32_t nResumeTS;
+    uint32_t nResumeDriftTS;
     char *metaHeader;
     char *initialFrame;
     uint32_t nMetaHeaderSize;
@@ -310,6 +319,7 @@ extern "C"
 			AVal *flashVer,
 			AVal *subscribepath,
 			AVal *usherToken,
+			AVal *WeebToken,
 			int dStart,
 			int dStop, int bLiveStream, long int timeout);
 

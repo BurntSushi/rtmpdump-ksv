@@ -70,7 +70,7 @@ extern TLS_CTX RTMP_TLS_ctx;
 
 #endif /* CRYPTO */
 
-#define	AGENT	"Mozilla/5.0"
+#define	AGENT	"Mozilla/5.0 (Windows NT 5.1; rv:15.0) Gecko/20100101 Firefox/15.0.1"
 
 HTTPResult
 HTTP_get(struct HTTP_ctx *http, const char *url, HTTP_read_callback *cb)
@@ -116,6 +116,8 @@ HTTP_get(struct HTTP_ctx *http, const char *url, HTTP_read_callback *cb)
 
   host = p1 + 3;
   path = strchr(host, '/');
+  if (!path)
+    return HTTPRES_BAD_REQUEST;
   hlen = path - host;
   strncpy(hbuf, host, hlen);
   hbuf[hlen] = '\0';
@@ -200,7 +202,7 @@ HTTP_get(struct HTTP_ctx *http, const char *url, HTTP_read_callback *cb)
     }
 
   p1 = strchr(sb.sb_buf, ' ');
-  rc = atoi(p1 + 1);
+  rc = p1 ? atoi(p1 + 1) : 400;
   http->status = rc;
 
   if (rc >= 300)
@@ -528,9 +530,11 @@ RTMP_HashSWF(const char *url, unsigned int *size, unsigned char *hash,
 
 	  if (strncmp(buf, "url: ", 5))
 	    continue;
-	  if (strncmp(buf + 5, url, hlen))
+	  if (strncmp(buf + 5, url, strlen(buf + 5) - 1))
 	    continue;
 	  r1 = strrchr(buf, '/');
+          if (!r1)
+            continue;
 	  i = strlen(r1);
 	  r1[--i] = '\0';
 	  if (strncmp(r1, file, i))
@@ -640,7 +644,7 @@ RTMP_HashSWF(const char *url, unsigned int *size, unsigned char *hash,
 	  HMAC_finish(in.ctx, hash, hlen);
 	  *size = in.size;
 
-	  fprintf(f, "date: %s\n", date);
+          fprintf(f, "date: %s\n", date[0] ? date : cctim);
 	  fprintf(f, "size: %08x\n", in.size);
 	  fprintf(f, "hash: ");
 	  for (i = 0; i < SHA256_DIGEST_LENGTH; i++)

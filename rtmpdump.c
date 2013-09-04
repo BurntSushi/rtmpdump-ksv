@@ -283,6 +283,7 @@ GetLastKeyframe(FILE * file,	// output file [in]
   uint8_t dataType;
   int bAudioOnly;
   off_t size;
+  char *syncbuf, *p;
 
   fseek(file, 0, SEEK_END);
   size = ftello(file);
@@ -293,8 +294,8 @@ GetLastKeyframe(FILE * file,	// output file [in]
 
   bAudioOnly = (dataType & 0x4) && !(dataType & 0x1);
 
-  RTMP_Log(RTMP_LOGDEBUG, "bAudioOnly: %d, size: %llu", bAudioOnly,
-      (unsigned long long) size);
+  RTMP_Log(RTMP_LOGDEBUG, "bAudioOnly: %d, size: %lu", bAudioOnly,
+           (unsigned long) size);
 
   // ok, we have to get the timestamp of the last keyframe (only keyframes are seekable) / last audio frame (audio only streams)
 
@@ -326,6 +327,51 @@ GetLastKeyframe(FILE * file,	// output file [in]
       prevTagSize = AMF_DecodeInt32(buffer);
       //RTMP_Log(RTMP_LOGDEBUG, "Last packet: prevTagSize: %d", prevTagSize);
 
+      if (prevTagSize <= 0 || prevTagSize > size - 4 - 13)
+        {
+          /* Last packet was not fully received - try to sync to last tag */
+          prevTagSize = 0;
+          tsize = size > 0x100000 ? 0x100000 : size; /* 1MB should be enough for 3500K bitrates */
+          if (tsize > 13 + 15)
+            {
+              tsize -= 13; // do not read header
+              syncbuf = (char *) malloc(tsize);
+              if (syncbuf)
+                {
+                  fseeko(file, size - tsize, SEEK_SET);
+                  if (fread(syncbuf, 1, tsize, file) == tsize)
+                    {
+                      p = syncbuf + tsize;
+                      while (p >= syncbuf + 15)
+                        {
+                          /* Check for StreamID */
+                          if (AMF_DecodeInt24(p - 7) == 0)
+                            {
+                              /* Check for Audio/Video/Script */
+                              dataType = p[-15] & 0x1F;
+                              if (dataType == 8 || dataType == 9 || dataType == 18)
+                                {
+                                  prevTagSize = AMF_DecodeInt24(p - 14);
+                                  if ((prevTagSize < tsize) && (p + prevTagSize + 11 <= syncbuf + tsize - 4)
+                                      && (AMF_DecodeInt32(p - 4 + prevTagSize) == prevTagSize + 11))
+                                    {
+                                      prevTagSize = syncbuf + tsize - p + 15;
+                                      RTMP_Log(RTMP_LOGDEBUG, "Sync success - found last tag at 0x%x", (uint32_t) (size - prevTagSize));
+                                      prevTagSize -= 4;
+                                      tsize = 0;
+                                      break;
+                                    }
+                                  else
+                                    prevTagSize = 0;
+                                }
+                            }
+                          --p;
+                        }
+                    }
+                  free(syncbuf);
+                }
+            }
+        }
       if (prevTagSize == 0)
 	{
 	  RTMP_Log(RTMP_LOGERROR, "Couldn't find keyframe to resume from!");
@@ -705,6 +751,8 @@ void usage(char *prog)
 	  RTMP_LogPrintf
 	    ("--jtv|-j JSON           Authentication token for Justin.tv legacy servers\n");
 	  RTMP_LogPrintf
+	    ("--weeb|-J string        Authentication token for weeb.tv servers\n");
+	  RTMP_LogPrintf
 	    ("--hashes|-#             Display progress with hashes, not with the byte counter\n");
 	  RTMP_LogPrintf
 	    ("--buffer|-b             Buffer time in milliseconds (default: %u)\n",
@@ -751,7 +799,8 @@ main(int argc, char **argv)
   AVal hostname = { 0, 0 };
   AVal playpath = { 0, 0 };
   AVal subscribepath = { 0, 0 };
-  AVal usherToken = { 0, 0 }; //Justin.tv auth token
+  AVal usherToken = { 0, 0 }; // Justin.tv auth token
+  AVal WeebToken = { 0, 0 };  // Weeb.tv auth token
   int port = -1;
   int protocol = RTMP_PROTOCOL_UNDEFINED;
   int retries = 0;
@@ -858,12 +907,13 @@ main(int argc, char **argv)
     {"quiet", 0, NULL, 'q'},
     {"verbose", 0, NULL, 'V'},
     {"jtv", 1, NULL, 'j'},
+    {"weeb", 1, NULL, 'J'},
     {0, 0, 0, 0}
   };
 
   while ((opt =
 	  getopt_long(argc, argv,
-		      "hVveqzRr:s:t:i:p:a:b:f:o:u:C:n:c:l:y:Ym:k:d:A:B:T:w:x:W:X:S:#j:",
+                      "hVveqzRr:s:t:i:p:a:b:f:o:u:C:n:c:l:y:Ym:k:d:A:B:T:w:x:W:X:S:#j:J:",
 		      longopts, NULL)) != -1)
     {
       switch (opt)
@@ -1079,6 +1129,9 @@ main(int argc, char **argv)
 	case 'j':
 	  STR2AVAL(usherToken, optarg);
 	  break;
+	case 'J':
+	  STR2AVAL(WeebToken, optarg);
+	  break;
 	default:
 	  RTMP_LogPrintf("unknown option: %c\n", opt);
 	  usage(argv[0]);
@@ -1170,14 +1223,14 @@ main(int argc, char **argv)
 
   if (tcUrl.av_len == 0)
     {
-	  tcUrl.av_len = strlen(RTMPProtocolStringsLower[protocol]) +
-	  	hostname.av_len + app.av_len + sizeof("://:65535/");
+      tcUrl.av_len = strlen(RTMPProtocolStringsLower[protocol]) +
+              hostname.av_len + app.av_len + sizeof ("://:65535/");
       tcUrl.av_val = (char *) malloc(tcUrl.av_len);
-	  if (!tcUrl.av_val)
-	    return RD_FAILED;
+      if (!tcUrl.av_val)
+        return RD_FAILED;
       tcUrl.av_len = snprintf(tcUrl.av_val, tcUrl.av_len, "%s://%.*s:%d/%.*s",
-	  	   RTMPProtocolStringsLower[protocol], hostname.av_len,
-		   hostname.av_val, port, app.av_len, app.av_val);
+                              RTMPProtocolStringsLower[protocol], hostname.av_len,
+                              hostname.av_val, port, app.av_len, app.av_val);
     }
 
   int first = 1;
@@ -1197,8 +1250,8 @@ main(int argc, char **argv)
   if (!fullUrl.av_len)
     {
       RTMP_SetupStream(&rtmp, protocol, &hostname, port, &sockshost, &playpath,
-		       &tcUrl, &swfUrl, &pageUrl, &app, &auth, &swfHash, swfSize,
-		       &flashVer, &subscribepath, &usherToken, dSeek, dStopOffset, bLiveStream, timeout);
+                       &tcUrl, &swfUrl, &pageUrl, &app, &auth, &swfHash, swfSize,
+                       &flashVer, &subscribepath, &usherToken, &WeebToken, dSeek, dStopOffset, bLiveStream, timeout);
     }
   else
     {

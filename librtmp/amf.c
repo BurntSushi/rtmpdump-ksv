@@ -618,6 +618,9 @@ AMFProp_Decode(AMFObjectProperty *prop, const char *pBuffer, int nSize,
       return -1;
     }
 
+  if (*pBuffer == AMF_NULL)
+    bDecodeName = 0;
+
   if (bDecodeName && nSize < 4)
     {				/* at least name (length + at least 1 byte) and 1 byte of data */
       RTMP_Log(RTMP_LOGDEBUG,
@@ -729,13 +732,13 @@ AMFProp_Decode(AMFObjectProperty *prop, const char *pBuffer, int nSize,
       }
     case AMF_DATE:
       {
-	RTMP_Log(RTMP_LOGDEBUG, "AMF_DATE");
-
 	if (nSize < 10)
 	  return -1;
 
 	prop->p_vu.p_number = AMF_DecodeNumber(pBuffer);
 	prop->p_UTCoffset = AMF_DecodeInt16(pBuffer + 8);
+        RTMP_Log(RTMP_LOGDEBUG, "AMF_DATE: %f, UTC offset: %d", prop->p_vu.p_number,
+                 prop->p_UTCoffset);
 
 	nSize -= 10;
 	break;
@@ -807,8 +810,8 @@ AMFProp_Dump(AMFObjectProperty *prop)
     }
   else
     {
-      name.av_val = "no-name.";
-      name.av_len = sizeof("no-name.") - 1;
+      name.av_val = "no-name";
+      name.av_len = sizeof ("no-name") - 1;
     }
   if (name.av_len > 18)
     name.av_len = 18;
@@ -1074,10 +1077,13 @@ AMF3_Decode(AMFObject *obj, const char *pBuffer, int nSize, int bAMFData)
 
 	  for (i = 0; i < cd.cd_num; i++)
 	    {
-	      AVal memberName;
-	      len = AMF3ReadString(pBuffer, &memberName);
-	      RTMP_Log(RTMP_LOGDEBUG, "Member: %s", memberName.av_val);
-	      AMF3CD_AddProp(&cd, &memberName);
+              AVal memberName = {NULL, 0};
+              len = AMF3ReadString(pBuffer, &memberName);
+              if (memberName.av_val)
+                {
+                  RTMP_Log(RTMP_LOGDEBUG, "Member: %s", memberName.av_val);
+                  AMF3CD_AddProp(&cd, &memberName);
+                }
 	      nSize -= len;
 	      pBuffer += len;
 	    }
@@ -1258,7 +1264,8 @@ AMF3CD_AddProp(AMF3ClassDef *cd, AVal *prop)
 {
   if (!(cd->cd_num & 0x0f))
     cd->cd_props = realloc(cd->cd_props, (cd->cd_num + 16) * sizeof(AVal));
-  cd->cd_props[cd->cd_num++] = *prop;
+  if (cd->cd_props)
+    cd->cd_props[cd->cd_num++] = *prop;
 }
 
 AVal *
