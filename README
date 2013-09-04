@@ -1,3 +1,6 @@
+**Note from burntsushi**: If you're getting segfaults, try compiling with
+`make SHARED=`.
+
 RTMP Dump v2.4
 (C) 2009 Andrej Stepanchuk
 (C) 2009-2011 Howard Chu
