@@ -5459,7 +5459,7 @@ fail:
 	  memcpy(mybuf, flvHeader, sizeof(flvHeader));
 	  r->m_read.buf += sizeof(flvHeader);
 	  r->m_read.buflen -= sizeof(flvHeader);
-          cnt += sizeof (flvHeader);
+	  cnt += sizeof(flvHeader);
 
 	  while (r->m_read.timestamp == 0)
 	    {
@@ -5472,14 +5472,14 @@ fail:
 		  r->m_read.status = nRead;
 		  goto fail;
 		}
-              /* buffer overflow, fix buffer and give up */
-              if (r->m_read.buf < mybuf || r->m_read.buf > end)
-                {
-                  mybuf = realloc(mybuf, cnt + nRead);
-                  memcpy(mybuf + cnt, r->m_read.buf, nRead);
-                  r->m_read.buf = mybuf + cnt + nRead;
-                  break;
-                }
+	      /* buffer overflow, fix buffer and give up */
+	      if (r->m_read.buf < mybuf || r->m_read.buf > end) {
+	      	mybuf = realloc(mybuf, cnt + nRead);
+		memcpy(mybuf+cnt, r->m_read.buf, nRead);
+		free(r->m_read.buf);
+		r->m_read.buf = mybuf+cnt+nRead;
+	        break;
+	      }
 	      cnt += nRead;
 	      r->m_read.buf += nRead;
 	      r->m_read.buflen -= nRead;
